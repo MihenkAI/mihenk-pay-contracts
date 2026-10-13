@@ -1,0 +1,124 @@
+# Mihenk Pay
+
+Condition-based USDC payments between crypto projects and KOLs (influencers). Part of [Mihenk AI](https://mihenkai.com).
+
+Mihenk AI measures which crypto KOLs really move the market: real reach (median views per post, not followers), bot-screened audiences, and every coin call scored against BTC. Mihenk Pay uses those measurements to settle KOL deals on-chain. The project locks the fee in USDC, the KOL accepts from the payout wallet, and the contract releases the money only when Mihenk verifies the post. Whatever isn't earned goes back to the project.
+
+**Live on Arc mainnet, Base mainnet and Monad mainnet** with native USDC (addresses below).
+
+## How it works
+
+1. **Lock.** The project (or its agency) locks the fee for one KOL in a supported stablecoin (USDC, or any standard ERC-20 the owner allows). Terms are agreed off-chain; only their hash goes on-chain.
+2. **Accept.** The KOL accepts from the payout wallet. This proves the wallet belongs to the KOL before any money moves.
+3. **Verify and settle.** After the post has stayed live for the agreed period, Mihenk posts the result. One part of the fee is earned on delivery, the rest when the real-reach target is met. Only a hash of the measurement report goes on-chain.
+4. **Dispute window.** Either side can dispute within the window (1 hour to 14 days). The owner resolves with a corrected payout.
+5. **Close.** Anyone can finalize after the window. The KOL receives the earned amount minus Mihenk's fee; the project gets back everything not earned.
+
+If Mihenk never settles before the deadline, the project can reclaim the full amount. An unresolved dispute falls back to Mihenk's result after 30 days, so funds can never be stuck.
+
+## Design choices
+
+- **Payouts are never tied to a token's price.** Paying KOLs for price moves would reward pumping. Mihenk pays for delivery and real reach only.
+- **Commercial terms stay confidential.** No social handles on-chain; the chain holds only hashes of the terms and of the result.
+- **Fee is fixed per campaign** at creation and hard-capped at 10%, so it cannot be raised after a project has funded.
+- **Fee-on-transfer tokens are rejected**, and every token must be allow-listed.
+- **Two-step ownership**, reentrancy guards, SafeERC20, custom errors.
+
+## Setup
+
+```
+git clone https://github.com/MihenkAI/mihenk-pay-contracts && cd mihenk-pay-contracts
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+git clone --depth 1 --branch v5.1.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts
+forge test
+```
+
+## Tests
+
+23 Foundry tests, including a fuzz test proving that every unit locked always ends up with the KOL, the project or the fee recipient, and nothing stays in the contract.
+
+## Deploy
+
+```
+DEPLOYER_KEY=... VERIFIER=0x... FEE_RECIPIENT=0x... TOKEN=0x... DISPUTE_WINDOW=3600 \
+forge script script/Deploy.s.sol --rpc-url <RPC> --broadcast
+```
+
+If `TOKEN` is empty, a testnet-only `TestUSD` with an open faucet is deployed and allow-listed. `script/DemoLive.s.sol` runs the full flow on a live network with a real stablecoin.
+
+On Arc, USDC is the native gas token and its ERC-20 interface (`0x3600…0000`) is backed by a precompile that Foundry's local EVM does not implement, so `forge script` cannot simulate token calls there. Deployment works with `forge script`; the Arc demo campaign below was sent with `cast send`, letting the node estimate gas.
+
+## Deployments
+
+### Arc mainnet (chain ID 5042)
+
+Live with native USDC ([`0x3600000000000000000000000000000000000000`](https://explorer.arc.io/address/0x3600000000000000000000000000000000000000)). Source verified on Sourcify (exact match). The USDC used here was moved from Base to Arc with Circle CCTP V2 and the forwarding service ([burn on Base](https://basescan.org/tx/0xd7c28654dec2e4af81c863787b6b0c5ffc0be6c934fe15a10b784143489b2c32), [mint on Arc](https://explorer.arc.io/tx/0x24db70c203ecd718ae876d1bebe4a5b8732398d9b36add10e7657e00fb153b17)).
+
+| Contract | Address |
+| --- | --- |
+| MihenkPay | [0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72](https://explorer.arc.io/address/0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72) |
+
+Demo campaign #1 with 2 USDC: a real, organic KOL post measured by Mihenk AI, replayed as a paid campaign (no actual sponsorship took place). 50% earned on delivery, 50% on reaching 20,000 real views, 1-hour dispute window. Delivery and reach were both met.
+
+| Step | Transaction |
+| --- | --- |
+| Project locks 2 USDC | [0x06826a768d…](https://explorer.arc.io/tx/0x06826a768dd3c87f6e002b2d6fa0814cef160e77763c6a46fdf6bca8b88bb55e) |
+| KOL accepts from payout wallet | [0x056de246ee…](https://explorer.arc.io/tx/0x056de246ee7c588ad9c2d40bc40b7865aad1386ffc7e3828c32457217fe96a6c) |
+| Mihenk settles (delivered + reach hit) | [0xdeb13c1b26…](https://explorer.arc.io/tx/0xdeb13c1b265fa483459afaaf79f7e7bf00a356412fc96c830176ada1a86f3c47) |
+| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | after the 1-hour dispute window |
+
+### Base mainnet (chain ID 8453)
+
+Live with USDC ([`0x8335…2913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)). Source verified on Sourcify.
+
+| Contract | Address |
+| --- | --- |
+| MihenkPay | [0xb5842Ea5b537C17DBda1F81d753b3969632107a9](https://basescan.org/address/0xb5842Ea5b537C17DBda1F81d753b3969632107a9) |
+
+Same demo campaign with 2 USDC:
+
+| Step | Transaction |
+| --- | --- |
+| Project locks 2 USDC | [0xf2c1ff0c94…](https://basescan.org/tx/0xf2c1ff0c94fe1bf799859f046ae1c2bd79be8661c55b18fd914e154fe4a3c1a6) |
+| KOL accepts from payout wallet | [0xb526c0c5d1…](https://basescan.org/tx/0xb526c0c5d1cf54a05fb90708332b96bb8280005c494a8fcd919032b23c1f802b) |
+| Mihenk settles (delivered + reach hit) | [0xb5c718f8a2…](https://basescan.org/tx/0xb5c718f8a2523b9c7bdd5aa23a2c156ff937c3788a1273e75965ea096491c224) |
+| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | after the 1-hour dispute window |
+
+### Monad mainnet (chain ID 143)
+
+Live with USDC ([0x7547…b603](https://monadvision.com/address/0x754704Bc059F8C67012fEd69BC8A327a5aafb603)). Source verified on Sourcify.
+
+| Contract | Address |
+| --- | --- |
+| MihenkPay | [0x95b35D96678f6a9aef9C5f09F95a0D9add06eFfb](https://monadvision.com/address/0x95b35D96678f6a9aef9C5f09F95a0D9add06eFfb) |
+
+| Step | Transaction |
+| --- | --- |
+| Project locks 2 USDC | [0x36563ffb5b…](https://monadvision.com/tx/0x36563ffb5b23eb558e2c6dd6eeaa7b58d92ef0e8fcb7924a6e19c19decb89d97) |
+| KOL accepts from payout wallet | [0x78aa74891b…](https://monadvision.com/tx/0x78aa74891b09752cc8ef3e85be9e2fda9ae4f3477ade860cc0d0537491b8692d) |
+| Mihenk settles (delivered + reach hit) | [0x3d037663fd…](https://monadvision.com/tx/0x3d037663fd27615dff415deff3c420cb69070c9319cc7e79a1ae20472687fc46) |
+| Finalize: KOL receives 1.94 USDC, contract balance back to 0 | [0x648b5c0901…](https://monadvision.com/tx/0x648b5c09013745750e6d2b0fb1d3943df66fd730c8a7ec3e9def9ebc673088c5) |
+
+### Robinhood Chain testnet (chain ID 46630)
+
+| Contract | Address |
+| --- | --- |
+| MihenkPay | [0x6170DeEe0F3146E83D00F482B7364108dAD4b6de](https://explorer.testnet.chain.robinhood.com/address/0x6170DeEe0F3146E83D00F482B7364108dAD4b6de) |
+| TestUSD (testnet-only stablecoin) | [0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72](https://explorer.testnet.chain.robinhood.com/address/0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72) |
+
+On every network, only `keccak256` hashes of the terms file and the measurement report are stored (`termsHash`, `resultHash`). The files themselves name the KOL, so they stay off-chain and are shared only with the parties.
+
+## Status
+
+The contracts have not had an external audit yet. Live deployments are used for demo campaigns with small amounts; client campaigns at scale come after an audit.
+
+## Roadmap
+
+- Connect settlement to Mihenk's live measurement pipeline (post detection, time live, bot-screened reach).
+- "Approve and pay" inside Mihenk's existing proposal builder: the client approves a KOL list and funds the campaign in one step, paying with USDC from any chain through CCTP.
+- Agent payments: let AI agents fund and settle KOL campaigns in USDC (x402-style flows).
+- Write each campaign's result on-chain as a portable KOL track record.
+
+## License
+
+MIT
