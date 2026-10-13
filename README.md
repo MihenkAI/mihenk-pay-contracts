@@ -65,7 +65,7 @@ Demo campaign #1 with 2 USDC: a real, organic KOL post measured by Mihenk AI, re
 | Project locks 2 USDC | [0x06826a768d…](https://explorer.arc.io/tx/0x06826a768dd3c87f6e002b2d6fa0814cef160e77763c6a46fdf6bca8b88bb55e) |
 | KOL accepts from payout wallet | [0x056de246ee…](https://explorer.arc.io/tx/0x056de246ee7c588ad9c2d40bc40b7865aad1386ffc7e3828c32457217fe96a6c) |
 | Mihenk settles (delivered + reach hit) | [0xdeb13c1b26…](https://explorer.arc.io/tx/0xdeb13c1b265fa483459afaaf79f7e7bf00a356412fc96c830176ada1a86f3c47) |
-| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | after the 1-hour dispute window |
+| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | [0x991737722c…](https://explorer.arc.io/tx/0x991737722c1f274df9a6e81bc2c0e0c7e0417e977927f268a7f3a99ceaa49a51) |
 
 ### Base mainnet (chain ID 8453)
 
@@ -82,7 +82,7 @@ Same demo campaign with 2 USDC:
 | Project locks 2 USDC | [0xf2c1ff0c94…](https://basescan.org/tx/0xf2c1ff0c94fe1bf799859f046ae1c2bd79be8661c55b18fd914e154fe4a3c1a6) |
 | KOL accepts from payout wallet | [0xb526c0c5d1…](https://basescan.org/tx/0xb526c0c5d1cf54a05fb90708332b96bb8280005c494a8fcd919032b23c1f802b) |
 | Mihenk settles (delivered + reach hit) | [0xb5c718f8a2…](https://basescan.org/tx/0xb5c718f8a2523b9c7bdd5aa23a2c156ff937c3788a1273e75965ea096491c224) |
-| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | after the 1-hour dispute window |
+| Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | [0x03e629ff6f…](https://basescan.org/tx/0x03e629ff6fb9d7f6b3d0a5de97128fdb71506d34c81f4c6dbaedc86334f3fcd2) |
 
 ### Monad mainnet (chain ID 143)
 
