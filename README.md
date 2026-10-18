@@ -84,6 +84,8 @@ Same demo campaign with 2 USDC:
 | Mihenk settles (delivered + reach hit) | [0xb5c718f8a2…](https://basescan.org/tx/0xb5c718f8a2523b9c7bdd5aa23a2c156ff937c3788a1273e75965ea096491c224) |
 | Finalize: KOL receives 1.94 USDC (2 minus 3% fee) | [0x03e629ff6f…](https://basescan.org/tx/0x03e629ff6fb9d7f6b3d0a5de97128fdb71506d34c81f4c6dbaedc86334f3fcd2) |
 
+Base Builder Code: transactions sent from these scripts on Base mainnet carry Mihenk AI's Builder Code (`bc_s415ugdv`, [ERC-8021](https://eip.tools/eip/8021)) at the end of the calldata, so Base attributes the activity to Mihenk AI. See `script/BuilderCode.sol`; the contract ignores the suffix, and `test/BuilderCode.t.sol` runs a full campaign with tagged calldata. The demo campaign above was sent before the Builder Code was added.
+
 ### Monad mainnet (chain ID 143)
 
 Live with USDC ([0x7547…b603](https://monadvision.com/address/0x754704Bc059F8C67012fEd69BC8A327a5aafb603)). Source verified on Sourcify.

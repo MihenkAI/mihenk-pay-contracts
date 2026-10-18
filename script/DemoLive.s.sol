@@ -4,8 +4,10 @@ pragma solidity 0.8.26;
 import {Script, console2} from "forge-std/Script.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MihenkPay} from "../src/MihenkPay.sol";
+import {BuilderCode} from "./BuilderCode.sol";
 
 /// Live-network demo with a real stablecoin (no minting): sponsor locks, KOL accepts, Mihenk settles.
+/// On Base mainnet every transaction carries Mihenk AI's Builder Code (see BuilderCode.sol).
 /// Env: PAY_CONTRACT, TOKEN, SPONSOR_KEY, KOL_KEY, VERIFIER_KEY,
 ///      AMOUNT (default 1 USDC = 1e6), DELIVERY_BPS (default 5000),
 ///      DELIVERED (default true), REACH_HIT (default true), TERMS_HASH, RESULT_HASH
@@ -25,20 +27,32 @@ contract DemoLive is Script {
         address kol = vm.addr(kolKey);
 
         vm.startBroadcast(sponsorKey);
-        token.approve(address(pay), amount);
-        uint256 id = pay.createCampaign(
-            kol, address(token), amount, deliveryBps,
-            uint40(block.timestamp + 1 days), uint40(block.timestamp + 7 days), termsHash
+        BuilderCode.exec(address(token), abi.encodeCall(IERC20.approve, (address(pay), uint256(amount))));
+        bytes memory ret = BuilderCode.exec(
+            address(pay),
+            abi.encodeCall(
+                MihenkPay.createCampaign,
+                (
+                    kol,
+                    address(token),
+                    amount,
+                    deliveryBps,
+                    uint40(block.timestamp + 1 days),
+                    uint40(block.timestamp + 7 days),
+                    termsHash
+                )
+            )
         );
+        uint256 id = abi.decode(ret, (uint256));
         vm.stopBroadcast();
         console2.log("Campaign id:", id);
 
         vm.startBroadcast(kolKey);
-        pay.acceptCampaign(id);
+        BuilderCode.exec(address(pay), abi.encodeCall(MihenkPay.acceptCampaign, (id)));
         vm.stopBroadcast();
 
         vm.startBroadcast(verifierKey);
-        pay.settle(id, delivered, reachHit, resultHash);
+        BuilderCode.exec(address(pay), abi.encodeCall(MihenkPay.settle, (id, delivered, reachHit, resultHash)));
         vm.stopBroadcast();
         console2.log("Settled. Run Finalize after the dispute window ends.");
     }
