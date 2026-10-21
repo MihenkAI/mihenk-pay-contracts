@@ -29,7 +29,9 @@ contract BuilderCodeTest is Test {
         bytes memory s = BuilderCode.SUFFIX;
         assertEq(s.length, 11 + 1 + 1 + 16);
         bytes memory code = new bytes(11);
-        for (uint256 i; i < 11; i++) code[i] = s[i];
+        for (uint256 i; i < 11; i++) {
+            code[i] = s[i];
+        }
         assertEq(string(code), "bc_s415ugdv");
         assertEq(uint8(s[11]), 11); // code length
         assertEq(uint8(s[12]), 0); // schema 0
@@ -68,6 +70,7 @@ contract BuilderCodeTest is Test {
                     address(usd),
                     uint128(2e6),
                     uint16(5000),
+                    uint40(0),
                     uint40(block.timestamp + 1 days),
                     uint40(block.timestamp + 7 days),
                     keccak256("terms")

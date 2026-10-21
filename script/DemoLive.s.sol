@@ -10,6 +10,7 @@ import {BuilderCode} from "./BuilderCode.sol";
 /// On Base mainnet every transaction carries Mihenk AI's Builder Code (see BuilderCode.sol).
 /// Env: PAY_CONTRACT, TOKEN, SPONSOR_KEY, KOL_KEY, VERIFIER_KEY,
 ///      AMOUNT (default 1 USDC = 1e6), DELIVERY_BPS (default 5000),
+///      MIN_LIVE (seconds after acceptance before settlement; default 0 so the demo settles at once),
 ///      DELIVERED (default true), REACH_HIT (default true), TERMS_HASH, RESULT_HASH
 contract DemoLive is Script {
     function run() external {
@@ -20,6 +21,7 @@ contract DemoLive is Script {
         uint256 verifierKey = vm.envUint("VERIFIER_KEY");
         uint128 amount = uint128(vm.envOr("AMOUNT", uint256(1e6)));
         uint16 deliveryBps = uint16(vm.envOr("DELIVERY_BPS", uint256(5_000)));
+        uint40 minLive = uint40(vm.envOr("MIN_LIVE", uint256(0)));
         bool delivered = vm.envOr("DELIVERED", true);
         bool reachHit = vm.envOr("REACH_HIT", true);
         bytes32 termsHash = vm.envOr("TERMS_HASH", keccak256("mihenk-demo-terms"));
@@ -37,8 +39,9 @@ contract DemoLive is Script {
                     address(token),
                     amount,
                     deliveryBps,
+                    minLive,
                     uint40(block.timestamp + 1 days),
-                    uint40(block.timestamp + 7 days),
+                    uint40(block.timestamp + 7 days + minLive),
                     termsHash
                 )
             )

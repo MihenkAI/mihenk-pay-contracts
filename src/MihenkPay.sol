@@ -14,6 +14,14 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 ///         goes back to the sponsor. Payouts are never tied to a token's price.
 /// @dev    Privacy: no social handles are stored. Only hashes of the off-chain terms
 ///         and of the measured result are written on-chain.
+///
+///         v2:
+///         - A payout the token refuses (for example to a USDC-blacklisted address) no
+///           longer blocks the other payouts: it is credited to that address and can be
+///           claimed later by that address only, so funds cannot get stuck.
+///         - The fee recipient is fixed per campaign at creation, like the fee rate.
+///         - The sponsor sets a minimum time after acceptance before Mihenk can settle.
+///         - The dispute window is at least 24 hours.
 contract MihenkPay is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -25,7 +33,7 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         Accepted, // KOL accepted with the payout wallet (proves wallet control)
         Settled, // Mihenk posted the result, dispute window running
         Disputed, // sponsor or KOL disputed the result
-        Closed, // funds distributed
+        Closed, // funds distributed (or credited for claim)
         Refunded // cancelled or expired, sponsor refunded in full
     }
 
@@ -41,6 +49,9 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         uint40 settleDeadline; // Mihenk must settle before this, else sponsor refund
         uint40 disputeEnds; // end of the dispute window after settlement
         Status status;
+        address feeRecipient; // Mihenk fee recipient, snapshotted at creation
+        uint40 minLive; // seconds after acceptance before Mihenk may settle
+        uint40 acceptedAt; // when the KOL accepted
         bytes32 termsHash; // hash of the off-chain campaign terms
         bytes32 resultHash; // hash of the off-chain measurement report
     }
@@ -49,19 +60,22 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
 
     uint16 public constant BPS = 10_000;
     uint16 public constant MAX_FEE_BPS = 1_000; // 10% hard cap
-    uint40 public constant MIN_DISPUTE_WINDOW = 1 hours;
+    uint40 public constant MIN_DISPUTE_WINDOW = 24 hours;
     uint40 public constant MAX_DISPUTE_WINDOW = 14 days;
     uint40 public constant RESOLVE_TIMEOUT = 30 days;
 
     // --------------------------------------------------------------- storage
 
     uint256 public nextId = 1;
-    mapping(uint256 => Campaign) public campaigns;
+    mapping(uint256 => Campaign) internal campaigns; // read with getCampaign()
     mapping(address => bool) public allowedToken;
 
+    /// @notice Payouts the token refused to transfer; only the account itself can claim them.
+    mapping(address token => mapping(address account => uint256)) public owed;
+
     address public verifier; // Mihenk measurement oracle
-    address public feeRecipient;
-    uint16 public feeBps;
+    address public feeRecipient; // for campaigns created from now on
+    uint16 public feeBps; // for campaigns created from now on
     uint40 public disputeWindow = 3 days;
 
     // ---------------------------------------------------------------- events
@@ -78,6 +92,7 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         uint40 settleDeadline,
         bytes32 termsHash
     );
+    event CampaignTerms(uint256 indexed id, address feeRecipient, uint40 minLive);
     event CampaignAccepted(uint256 indexed id);
     event CampaignCancelled(uint256 indexed id);
     event CampaignSettled(
@@ -87,6 +102,8 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
     event DisputeResolved(uint256 indexed id, uint256 kolPayout, bytes32 resultHash);
     event CampaignClosed(uint256 indexed id, uint256 kolNet, uint256 fee, uint256 sponsorRefund);
     event CampaignRefunded(uint256 indexed id, uint256 amount);
+    event PayoutDeferred(address indexed token, address indexed account, uint256 amount);
+    event Claimed(address indexed token, address indexed account, uint256 amount);
 
     event VerifierSet(address verifier);
     event FeeSet(uint16 feeBps, address feeRecipient);
@@ -110,6 +127,7 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
     error TooEarly();
     error FeeOnTransferToken();
     error PayoutTooHigh();
+    error NothingToClaim();
 
     // ----------------------------------------------------------- constructor
 
@@ -124,6 +142,7 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         _setVerifier(verifier_);
     }
 
+    /// @notice Applies only to campaigns created afterwards.
     function setFee(uint16 feeBps_, address feeRecipient_) external onlyOwner {
         _setFee(feeBps_, feeRecipient_);
     }
@@ -143,11 +162,15 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
     // ------------------------------------------------------------ sponsor
 
     /// @notice Lock a KOL fee. The sponsor must have approved `amount` first.
+    /// @param minLive Seconds that must pass after the KOL accepts before Mihenk can settle
+    ///        (the agreed time the post stays live). Settlement must still fit before
+    ///        `settleDeadline` even if the KOL accepts right at `postDeadline`.
     function createCampaign(
         address kol,
         address token,
         uint128 amount,
         uint16 deliveryBps,
+        uint40 minLive,
         uint40 postDeadline,
         uint40 settleDeadline,
         bytes32 termsHash
@@ -156,29 +179,31 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         if (!allowedToken[token]) revert TokenNotAllowed();
         if (amount == 0) revert InvalidAmount();
         if (deliveryBps > BPS) revert InvalidBps();
-        if (postDeadline <= block.timestamp || settleDeadline <= postDeadline) revert InvalidDeadlines();
+        if (postDeadline <= block.timestamp || uint256(settleDeadline) <= uint256(postDeadline) + minLive) {
+            revert InvalidDeadlines();
+        }
 
-        IERC20 t = IERC20(token);
-        uint256 before = t.balanceOf(address(this));
-        t.safeTransferFrom(msg.sender, address(this), amount);
-        if (t.balanceOf(address(this)) - before != amount) revert FeeOnTransferToken();
+        _pull(IERC20(token), amount);
 
         id = nextId++;
         Campaign storage c = campaigns[id];
         c.sponsor = msg.sender;
         c.kol = kol;
-        c.token = t;
+        c.token = IERC20(token);
         c.amount = amount;
         c.deliveryBps = deliveryBps;
         c.feeBps = feeBps;
+        c.feeRecipient = feeRecipient;
+        c.minLive = minLive;
         c.postDeadline = postDeadline;
         c.settleDeadline = settleDeadline;
         c.status = Status.Funded;
         c.termsHash = termsHash;
 
         emit CampaignCreated(
-            id, msg.sender, kol, token, amount, deliveryBps, feeBps, postDeadline, settleDeadline, termsHash
+            id, msg.sender, kol, token, amount, deliveryBps, c.feeBps, postDeadline, settleDeadline, termsHash
         );
+        emit CampaignTerms(id, c.feeRecipient, minLive);
     }
 
     /// @notice Sponsor can take the money back while the KOL has not accepted yet.
@@ -201,16 +226,19 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         if (c.status != Status.Funded) revert WrongStatus(c.status);
         if (block.timestamp > c.postDeadline) revert TooLate();
         c.status = Status.Accepted;
+        c.acceptedAt = uint40(block.timestamp);
         emit CampaignAccepted(id);
     }
 
     // ----------------------------------------------------------- verifier
 
     /// @notice Mihenk posts the measured outcome. Reach can only count if delivered.
+    ///         Not earlier than `minLive` seconds after the KOL accepted.
     function settle(uint256 id, bool delivered, bool reachHit, bytes32 resultHash) external {
         if (msg.sender != verifier) revert NotVerifier();
         Campaign storage c = campaigns[id];
         if (c.status != Status.Accepted) revert WrongStatus(c.status);
+        if (block.timestamp < uint256(c.acceptedAt) + c.minLive) revert TooEarly();
         if (block.timestamp > c.settleDeadline) revert TooLate();
 
         uint256 payout;
@@ -273,7 +301,16 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
         if (block.timestamp <= c.settleDeadline) revert TooEarly();
         c.status = Status.Refunded;
         emit CampaignRefunded(id, c.amount);
-        c.token.safeTransfer(c.sponsor, c.amount);
+        _pay(c.token, c.sponsor, c.amount);
+    }
+
+    /// @notice Withdraw payouts that could not be transferred earlier. Only to the caller.
+    function claim(IERC20 token) external nonReentrant {
+        uint256 amt = owed[address(token)][msg.sender];
+        if (amt == 0) revert NothingToClaim();
+        owed[address(token)][msg.sender] = 0;
+        emit Claimed(address(token), msg.sender, amt);
+        token.safeTransfer(msg.sender, amt);
     }
 
     // ------------------------------------------------------------- views
@@ -284,6 +321,12 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
 
     // ----------------------------------------------------------- internal
 
+    function _pull(IERC20 t, uint128 amount) internal {
+        uint256 before = t.balanceOf(address(this));
+        t.safeTransferFrom(msg.sender, address(this), amount);
+        if (t.balanceOf(address(this)) - before != amount) revert FeeOnTransferToken();
+    }
+
     function _distribute(uint256 id, Campaign storage c) internal {
         c.status = Status.Closed;
         uint256 gross = c.kolPayout;
@@ -293,9 +336,26 @@ contract MihenkPay is Ownable2Step, ReentrancyGuard {
 
         emit CampaignClosed(id, kolNet, fee, refund);
 
-        if (kolNet > 0) c.token.safeTransfer(c.kol, kolNet);
-        if (fee > 0) c.token.safeTransfer(feeRecipient, fee);
-        if (refund > 0) c.token.safeTransfer(c.sponsor, refund);
+        _pay(c.token, c.kol, kolNet);
+        _pay(c.token, c.feeRecipient, fee);
+        _pay(c.token, c.sponsor, refund);
+    }
+
+    /// @dev Transfers `amount`, or credits it to `to` if the token refuses the transfer,
+    ///      so one refused recipient never blocks the others.
+    function _pay(IERC20 token, address to, uint256 amount) internal {
+        if (amount == 0) return;
+        if (!_tryTransfer(token, to, amount)) {
+            owed[address(token)][to] += amount;
+            emit PayoutDeferred(address(token), to, amount);
+        }
+    }
+
+    function _tryTransfer(IERC20 token, address to, uint256 amount) private returns (bool) {
+        (bool ok, bytes memory ret) = address(token).call(abi.encodeCall(IERC20.transfer, (to, amount)));
+        if (!ok) return false;
+        if (ret.length == 0) return address(token).code.length > 0;
+        return ret.length >= 32 && abi.decode(ret, (uint256)) == 1;
     }
 
     function _setVerifier(address verifier_) internal {
