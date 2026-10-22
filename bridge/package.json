@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@circle-fin/adapter-viem-v2": "^1.19.0",
+    "@circle-fin/bridge-kit": "^1.15.2",
+    "viem": "^2.57.5"
+  }
+}

@@ -142,6 +142,10 @@ Live with USDC ([0x7547…b603](https://monadvision.com/address/0x754704Bc059F8C
 
 On every network, only `keccak256` hashes of the terms file and the measurement report are stored (`termsHash`, `resultHash`). The files themselves name the KOL, so they stay off-chain and are shared only with the parties.
 
+## Bridging USDC to Arc (CCTP)
+
+`bridge/cctp_base_to_arc.mjs` moves USDC from Base to Arc with Circle Bridge Kit (CCTP V2) and the forwarding service, so the receiving wallet needs no gas on Arc. It funded the Arc demo campaign ([burn on Base](https://basescan.org/tx/0xd7c28654dec2e4af81c863787b6b0c5ffc0be6c934fe15a10b784143489b2c32), [mint on Arc](https://explorer.arc.io/tx/0x24db70c203ecd718ae876d1bebe4a5b8732398d9b36add10e7657e00fb153b17)). Run `npm install` in `bridge/`, then `SPONSOR_KEY=0x... AMOUNT=5.40 node cctp_base_to_arc.mjs` for an estimate, adding `SEND=1` to bridge.
+
 ## Status
 
 The contracts have not had an external audit yet. Live deployments are used for demo campaigns with small amounts; client campaigns at scale come after an audit. Security reports are welcome at hello@mihenkai.com.
