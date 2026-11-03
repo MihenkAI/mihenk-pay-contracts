@@ -4,7 +4,7 @@ Condition-based USDC payments between crypto projects and KOLs (influencers). Pa
 
 Mihenk AI measures which crypto KOLs really move the market: real reach (median views per post, not followers), bot-screened audiences, and every coin call scored against BTC. Mihenk Pay uses those measurements to settle KOL deals on-chain. The project locks the fee in USDC, the KOL accepts from the payout wallet, and the contract releases the money only when Mihenk verifies the post. Whatever isn't earned goes back to the project.
 
-**Live on Arc, Base, Monad, Sei and Avalanche C-Chain mainnet** with native USDC. Current version: **v2** (22 Oct 2026, addresses below).
+**Live on Arc, Base, Monad, Sei, Avalanche C-Chain and Arbitrum One mainnet** with native USDC. Current version: **v2** (22 Oct 2026, addresses below).
 
 ## How it works
 
@@ -53,7 +53,7 @@ On Arc, USDC is the native gas token and its ERC-20 interface (`0x3600…0000`) 
 
 ### v2 (live since 22 Oct 2026)
 
-Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4`](https://basescan.org/address/0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4); verifier and fee recipient `0x845B9cff41Eb67e56673375D842b7C5b949Cc7aA`; fee 3%; dispute window 3 days (1 day on Sei); native USDC allow-listed. Source verified on Sourcify (exact match) on all five networks.
+Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4`](https://basescan.org/address/0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4); verifier and fee recipient `0x845B9cff41Eb67e56673375D842b7C5b949Cc7aA`; fee 3%; dispute window 3 days (1 day on Sei); native USDC allow-listed. Source verified on Sourcify (exact match) on all six networks.
 
 | Network | MihenkPay v2 | Deploy transaction |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5
 | Monad mainnet (143) | [0x45f1710e871F0113D47CEce6C9D9dDB823B7Ba52](https://monadvision.com/address/0x45f1710e871F0113D47CEce6C9D9dDB823B7Ba52) | [0x4376c22089…](https://monadvision.com/tx/0x4376c220896fa171b09339c0654014c6121b7627fd59133608d7f6eab0a93055) |
 | Sei mainnet (1329) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://seitrace.com/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F?chain=pacific-1) | [0xdb405fc45f…](https://seitrace.com/tx/0xdb405fc45fcc64f4f00ec4ab628dbc9636fc68abd74f07aca0bf0cb85374ec72?chain=pacific-1) |
 | Avalanche C-Chain (43114) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://snowtrace.io/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F) | [0x26f1babe23…](https://snowtrace.io/tx/0x26f1babe23de17fdb4f2df0443812207fc44f2510a47ee4f1ad88d9540eac2f7) |
+| Arbitrum One (42161) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://arbiscan.io/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F) | [0x2caabb2280…](https://arbiscan.io/tx/0x2caabb2280e8fe23780202aeb3f5e6b84e44eb2458ce5968a0033396d787c1db) |
 
 What changed from v1, after issues were reported to us once v1 was live:
 
