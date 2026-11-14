@@ -10,6 +10,10 @@ import express from "express";
 import { execFile } from "node:child_process";
 import { appendFile } from "node:fs";
 import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
+// Second payment option: standard x402 "exact" on Base settled by the Coinbase CDP facilitator (x402 Bazaar discovery).
+import { createX402Server } from "@coinbase/cdp-sdk/x402";
+import { paymentMiddlewareFromHTTPServer } from "@x402/express";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 
 const PORT = Number(process.env.PORT || 8097);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -65,6 +69,92 @@ gateway.onAfterSettle(async (ctx) => {
     appendFile(LOG_FILE, line + "\n", () => {});
   } catch { /* logging only */ }
 });
+
+// ---- Second payment option: standard x402 "exact", USDC on Base, settled by the Coinbase CDP facilitator ----------------
+// Same data, price, "no charge on 404" and per-wallet daily cap as the Gateway routes, under /x402/pay/. Listed in the
+// x402 Bazaar (Agentic.Market) after a settled payment. Off unless CDP_API_KEY_ID and CDP_API_KEY_SECRET are set.
+const CDP_ON = !!(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
+const CDP_NETWORK = process.env.X402_CDP_NETWORK || "eip155:8453";
+const ICON = process.env.X402_ICON_URL || "https://mihenkai.com/android-chrome-512.png";
+const TAGS = ["crypto", "kol", "influencers", "social-intelligence", "x-twitter", "trading"];
+const EXAMPLE_KOL = {
+  handle: "example_kol", name: "Example KOL", profile_url: "https://x.com/example_kol", followers: 250000,
+  real_reach: { median_views_per_post: 18000, views_per_follower: 0.072 }, impact_class: "mid",
+  audience: { authentic_engagement: 0.95, audience_quality: 0.62, integrity: 1.0, scale: "0 to 1, higher is better" },
+  mihenk_score: { value: 7.4, scale: "0 to 10" }, smart_followers: 120,
+  calls_90d: { measured: 64, went_their_way: 35, hit_rate_pct: 54.7, avg_move_pct: 1.2 },
+  recent_calls: [{ coin: "SOL", direction: "long", posted_at: "2026-11-13T21:10Z", move_24h_pct: 2.1 }],
+  measured_at: "2026-11-12", card_url: "https://mihenkai.com/check/@example_kol",
+};
+const EXAMPLE_COIN = {
+  symbol: "SOL", hours: 24, summary: { calls: 22, kols: 22, long: 20, short: 2, verified_on_0g: 11 },
+  calls: [{ kol: "example_kol", followers: 250000, median_views_per_post: 18000, direction: "long", posted_at: "2026-11-14T00:32Z",
+    post_url: "https://x.com/example_kol/status/1", price_move_pct: { "5m": -0.4, "1h": -0.8 }, price_source: "exchange",
+    kol_record_90d: { measured: 83, hit_rate_pct: 53.0 } }],
+};
+const DESC_KOL = "Measured record of one crypto KOL (influencer) on X, by handle: Mihenk score (0 to 10), real reach "
+  + "(median views per post), audience quality and integrity, 90-day call record (share of calls where the price moved their "
+  + "way within 24h) and recent calls. Only measured accounts; an unmeasured handle returns 404 and the payment is not settled.";
+const DESC_COIN = "Measured crypto KOLs who called a coin on X in the last N hours (1 to 168): direction (long or short), "
+  + "post link, price moves after the post (5m, 1h, 4h, 24h) and each KOL's 90-day call record. Up to 100 calls, newest first. "
+  + "Some calls carry a TEE-attested second reading of the post on 0G.";
+let cdpPaywall = null;
+if (CDP_ON) {
+  const route = (price, description, extensions) => ({
+    accepts: { scheme: "exact", price, network: CDP_NETWORK, payTo: SELLER },
+    description, mimeType: "application/json", serviceName: "Mihenk AI", tags: TAGS, iconUrl: ICON, extensions,
+  });
+  try {
+    const cdp = await createX402Server({
+      environment: "production",
+      payToConfig: { type: "address", evm: SELLER },
+      routes: {
+        "GET /x402/pay/kol/:handle": route(PRICE_KOL, DESC_KOL, declareDiscoveryExtension({
+          pathParams: { handle: "example_kol" },
+          pathParamsSchema: { type: "object", properties: { handle: { type: "string", pattern: "^@?[A-Za-z0-9_]{1,15}$",
+            description: "X (Twitter) handle, with or without @" } }, required: ["handle"] },
+          output: { example: EXAMPLE_KOL },
+        })),
+        "GET /x402/pay/coin/:symbol/calls": route(PRICE_COIN, DESC_COIN, declareDiscoveryExtension({
+          pathParams: { symbol: "SOL" },
+          pathParamsSchema: { type: "object", properties: { symbol: { type: "string", pattern: "^\\$?[A-Za-z0-9]{1,15}$",
+            description: "Coin ticker, e.g. SOL" } }, required: ["symbol"] },
+          input: { hours: 24 },
+          inputSchema: { type: "object", properties: { hours: { type: "integer", minimum: 1, maximum: 168, default: 24,
+            description: "Look-back window in hours" } } },
+          output: { example: EXAMPLE_COIN },
+        })),
+      },
+    });
+    cdp.resourceServer.onBeforeSettle(async (ctx) => {
+      const p = payerOf(ctx);
+      if (!p) return;
+      const s = COUNTS.get(p);
+      if (s && s.day === day() && s.n >= DAILY_CAP) {
+        return { abort: true, reason: "daily_limit", message: `Daily limit of ${DAILY_CAP} paid calls per wallet reached; try again tomorrow (UTC).` };
+      }
+    });
+    cdp.resourceServer.onAfterSettle(async (ctx) => {
+      try {
+        const r = ctx.result || {};
+        const p = (r.payer || payerOf(ctx) || "").toLowerCase();
+        if (r.success && p) {
+          const s = COUNTS.get(p);
+          COUNTS.set(p, s && s.day === day() ? { day: s.day, n: s.n + 1 } : { day: day(), n: 1 });
+          if (COUNTS.size > 20000) COUNTS.clear();
+        }
+        const line = JSON.stringify({ ev: "settled", via: "cdp", ok: !!r.success, reason: r.errorReason, payer: r.payer, network: r.network,
+          tx: r.transaction, amount: ctx.requirements?.amount, payTo: ctx.requirements?.payTo, at: new Date().toISOString() });
+        console.log(line);
+        appendFile(LOG_FILE, line + "\n", () => {});
+      } catch { /* logging only */ }
+    });
+    cdpPaywall = paymentMiddlewareFromHTTPServer(cdp);
+    console.log("cdp facilitator: on", CDP_NETWORK, "payTo", SELLER);
+  } catch (e) {
+    console.error("cdp facilitator off:", String(e && e.message || e).slice(0, 300));
+  }
+}
 
 function helper(args) {
   return new Promise((resolve) => {
@@ -223,11 +313,26 @@ const OPENAPI = {
   },
 };
 
+if (cdpPaywall) {   // describe the second payment option in the free docs
+  ABOUT.payment_standard = { protocol: "x402", scheme: "exact (EIP-3009, USDC)", network: CDP_NETWORK, facilitator: "Coinbase CDP",
+    seller: SELLER, paths: `${BASE_URL}/pay/...` };
+  ABOUT.endpoints[`GET ${BASE_URL}/pay/kol/{handle}`] = "Same KOL record, paid with standard x402 (exact, USDC on Base)";
+  ABOUT.endpoints[`GET ${BASE_URL}/pay/coin/{symbol}/calls?hours=24`] = "Same coin calls, paid with standard x402 (exact, USDC on Base)";
+  const k = OPENAPI.paths["/kol/{handle}"].get, c = OPENAPI.paths["/coin/{symbol}/calls"].get;
+  OPENAPI.paths["/pay/kol/{handle}"] = { get: { ...k, operationId: "getKolExact",
+    description: `Same as /kol/{handle}, paid with standard x402 (scheme exact, USDC on Base, Coinbase CDP facilitator). ${ABOUT.price_per_call.kol} per call.` } };
+  OPENAPI.paths["/pay/coin/{symbol}/calls"] = { get: { ...c, operationId: "getCoinCallsExact",
+    description: `Same as /coin/{symbol}/calls, paid with standard x402 (scheme exact, USDC on Base, Coinbase CDP facilitator). ${ABOUT.price_per_call.coin_calls} per call.` } };
+}
 app.get(["/x402", "/x402/"], (req, res) => res.json(ABOUT));
 app.get("/x402/openapi.json", (req, res) => res.json(OPENAPI));
 app.get("/x402/health", (req, res) => res.json({ ok: true }));
 app.get("/x402/kol/:handle", precheck(KOL), gateway.require(PRICE_KOL), respond(KOL));
 app.get("/x402/coin/:symbol/calls", precheck(COIN), gateway.require(PRICE_COIN), respond(COIN));
+if (cdpPaywall) {   // standard x402 "exact" on Base via the Coinbase CDP facilitator (x402 Bazaar)
+  app.get("/x402/pay/kol/:handle", precheck(KOL), cdpPaywall, respond(KOL));
+  app.get("/x402/pay/coin/:symbol/calls", precheck(COIN), cdpPaywall, respond(COIN));
+}
 app.use((req, res) => res.status(404).json({ error: "not_found", see: `${BASE_URL}/` }));
 app.use((err, req, res, _next) => {
   console.error("hata", String(err && err.stack || err).slice(0, 800));

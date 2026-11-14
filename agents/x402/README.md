@@ -12,9 +12,13 @@ Live API: `https://app.mihenkai.com/x402/` · OpenAPI: `https://app.mihenkai.com
 | --- | --- | --- |
 | `GET /x402/kol/{handle}` | 0.01 USDC | One KOL on X: Mihenk score, real reach (median views per post), authentic engagement, audience quality, integrity, 90-day call record, last 10 calls |
 | `GET /x402/coin/{symbol}/calls?hours=24` | 0.01 USDC | Measured KOLs who called a coin in the last 1–168 hours: direction, post link, price move at 5 min / 1 h / 4 h / 24 h, each KOL's 90-day record |
+| `GET /x402/pay/kol/{handle}` | 0.01 USDC | Same KOL record, paid with standard x402 (`exact`, USDC on Base) |
+| `GET /x402/pay/coin/{symbol}/calls?hours=24` | 0.01 USDC | Same coin calls, paid with standard x402 (`exact`, USDC on Base) |
 | `GET /x402/` and `/x402/openapi.json` | free | Description and spec |
 
 - **Networks:** Arc (`eip155:5042`), Base (`eip155:8453`), Polygon (`eip155:137`), through Circle Gateway (batched, gas-free for the buyer).
+- **Standard x402:** the `/x402/pay/...` routes take a plain x402 `exact` payment (EIP-3009 USDC on Base), settled by the
+  Coinbase CDP facilitator. Any x402 client works, and the routes are listed in the x402 Bazaar (Agentic.Market).
 - **No charge for nothing:** if a handle or symbol has no measured data, the API answers `404` and the payment is not settled.
 - **Daily limit:** 200 paid calls per paying wallet per UTC day, so the dataset can't be bulk-copied.
 - **What "measured" means:** a call is a KOL post that names a coin with a direction; Mihenk prices it 5 minutes, 1 hour, 4 hours and 24 hours after the post. Details: https://mihenkai.com/methodology.html. Measurement, not investment advice.
@@ -36,6 +40,25 @@ console.log(r.formattedAmount, r.data.real_reach, r.data.calls_90d);
 
 See [`buyer/pay.mjs`](buyer/pay.mjs). For testing use `chain: "arcTestnet"` and testnet USDC from https://faucet.circle.com.
 
+### Option B: standard x402 on Base
+
+```bash
+npm install @x402/core @x402/evm @x402/fetch viem
+```
+
+```js
+import { x402Client } from "@x402/core/client";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { wrapFetchWithPayment } from "@x402/fetch";
+import { privateKeyToAccount } from "viem/accounts";
+
+const client = new x402Client();
+registerExactEvmScheme(client, { signer: privateKeyToAccount(process.env.AGENT_KEY) }); // holds USDC on Base
+const pay = wrapFetchWithPayment(fetch, client);
+const res = await pay("https://app.mihenkai.com/x402/pay/kol/CryptoMichNL");   // 0.01 USDC, gas paid by the facilitator
+console.log(await res.json());
+```
+
 ## Seller: how the API is built
 
 [`seller/server.js`](seller/server.js) is the code that runs in production (Express + `createGatewayMiddleware`).
@@ -49,5 +72,9 @@ Order of operations for a paid request:
 2. If a payment is attached, the data is looked up first; nothing measured → `404`, payment not settled.
 3. Daily limit per payer is checked before settlement (`onBeforeSettle`).
 4. Circle Gateway settles the payment, the JSON is returned, and the settlement is logged.
+
+The `/x402/pay/...` routes follow the same order with `createX402Server` from `@coinbase/cdp-sdk/x402` and
+`paymentMiddlewareFromHTTPServer` from `@x402/express` (set `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET`); each route also
+declares Bazaar discovery metadata (description, path and query schemas, an output example and an icon).
 
 Contact: hello@mihenkai.com
