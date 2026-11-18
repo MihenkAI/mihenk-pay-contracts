@@ -153,6 +153,9 @@ On every network, only `keccak256` hashes of the terms file and the measurement 
 | Network | MihenkRecords | Writer |
 | --- | --- | --- |
 | 0G mainnet (16661) | [0x4d1f3aB10f21b6995769F4d26195cCB69225eF9C](https://chainscan.0g.ai/address/0x4d1f3aB10f21b6995769F4d26195cCB69225eF9C) | `0xB3298604C606c14FF6B5958AC5CFa64BfcbCa476` |
+| Arbitrum One (42161) | [0x8774c56FAB137a9Ed11EbE2816F8eD6FBcE4f57B](https://arbiscan.io/address/0x8774c56FAB137a9Ed11EbE2816F8eD6FBcE4f57B) | `0xD23b7E4d1C1d3ED88De2a69692A35aEF591A9f36` |
+
+Both were deployed from this code and are verified on Sourcify (exact match). Both hold the same daily roots from 24 Sep 2026 on; the days before 18 Nov 2026 were written on that day.
 
 More on Mihenk and 0G (Compute, Storage, Chain): [`agents/0g`](agents/0g).
 

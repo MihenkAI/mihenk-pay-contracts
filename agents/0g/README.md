@@ -84,3 +84,5 @@ wallet on Mihenk's payment page; 0G is one of the networks there.
 `0G_STORAGE_DAILY` (the storage root of the day's archive) and `EVIDENCE_SEAL` (the evidence archive's Merkle root).
 `rootOf(kind, day)` reads a record (`kind`: 32-byte ASCII label, `day`: `YYYYMMDD`). A record can be written once and never
 changed, so the chain shows when each root existed. The evidence seals back to 24 Sep 2026 were written on 18 Nov 2026.
+The same roots also go to MihenkRecords on Arbitrum One
+([`0x8774c56FAB137a9Ed11EbE2816F8eD6FBcE4f57B`](https://arbiscan.io/address/0x8774c56FAB137a9Ed11EbE2816F8eD6FBcE4f57B), Sourcify exact match).
