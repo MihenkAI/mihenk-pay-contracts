@@ -4,7 +4,7 @@ Condition-based USDC payments between crypto projects and KOLs (influencers). Pa
 
 Mihenk AI measures which crypto KOLs really move the market: real reach (median views per post, not followers), bot-screened audiences, and every coin call scored against BTC. Mihenk Pay uses those measurements to settle KOL deals on-chain. The project locks the fee in USDC, the KOL accepts from the payout wallet, and the contract releases the money only when Mihenk verifies the post. Whatever isn't earned goes back to the project.
 
-**Live on Arc, Base, Monad, Sei, Avalanche C-Chain and Arbitrum One mainnet** with native USDC. Current version: **v2** (22 Oct 2026, addresses below).
+**Live on Arc, Base, Monad, Sei, Avalanche C-Chain, Arbitrum One and 0G mainnet** with USDC (native USDC; Bridged USDC.e on 0G). Current version: **v2** (22 Oct 2026, addresses below).
 
 ## How it works
 
@@ -53,7 +53,7 @@ On Arc, USDC is the native gas token and its ERC-20 interface (`0x3600…0000`) 
 
 ### v2 (live since 22 Oct 2026)
 
-Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4`](https://basescan.org/address/0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4); verifier and fee recipient `0x845B9cff41Eb67e56673375D842b7C5b949Cc7aA`; fee 3%; dispute window 3 days (1 day on Sei); native USDC allow-listed. Source verified on Sourcify (exact match) on all six networks.
+Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4`](https://basescan.org/address/0x9e366c62f1310115e5832af0d46c6f26f8a1e0b4); verifier and fee recipient `0x845B9cff41Eb67e56673375D842b7C5b949Cc7aA`; fee 3%; dispute window 3 days (1 day on Sei); native USDC allow-listed. Source verified on Sourcify (exact match) on all seven networks. On 0G, where Circle has no native USDC, the allow-listed token is Bridged USDC (USDC.e).
 
 | Network | MihenkPay v2 | Deploy transaction |
 | --- | --- | --- |
@@ -63,6 +63,7 @@ Deployed with `script/Deploy.s.sol` from this code. Owner [`0x9e366c62f1310115e5
 | Sei mainnet (1329) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://seitrace.com/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F?chain=pacific-1) | [0xdb405fc45f…](https://seitrace.com/tx/0xdb405fc45fcc64f4f00ec4ab628dbc9636fc68abd74f07aca0bf0cb85374ec72?chain=pacific-1) |
 | Avalanche C-Chain (43114) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://snowtrace.io/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F) | [0x26f1babe23…](https://snowtrace.io/tx/0x26f1babe23de17fdb4f2df0443812207fc44f2510a47ee4f1ad88d9540eac2f7) |
 | Arbitrum One (42161) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://arbiscan.io/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F) | [0x2caabb2280…](https://arbiscan.io/tx/0x2caabb2280e8fe23780202aeb3f5e6b84e44eb2458ce5968a0033396d787c1db) |
+| 0G mainnet (16661) | [0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F](https://chainscan.0g.ai/address/0xA4461bA5791D32C541081DEf50DF2eFC6E3a611F) | [0xad0dadc567…](https://chainscan.0g.ai/tx/0xad0dadc567b44eaa5a638dfed2713472a60a28e5203fd6e9d903eebced38f255) |
 
 What changed from v1, after issues were reported to us once v1 was live:
 
@@ -144,6 +145,16 @@ Live with USDC ([0x7547…b603](https://monadvision.com/address/0x754704Bc059F8C
 | TestUSD (testnet-only stablecoin) | [0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72](https://explorer.testnet.chain.robinhood.com/address/0xd49Da88a030Ac997C5fda06E84752e9f4d9b7b72) |
 
 On every network, only `keccak256` hashes of the terms file and the measurement report are stored (`termsHash`, `resultHash`). The files themselves name the KOL, so they stay off-chain and are shared only with the parties.
+
+## MihenkRecords
+
+[`src/MihenkRecords.sol`](src/MihenkRecords.sol) keeps an append-only record of the root hashes Mihenk AI publishes each day: the root of the day's 0G Storage archive of TEE-verified readings and x402 receipts (`0G_STORAGE_DAILY`) and the Merkle root of the day's evidence archive of KOL posts (`EVIDENCE_SEAL`). Only the writer set at deployment can write, and each kind and day can be written once and never changed. `rootOf(kind, day)` returns a record (`kind`: 32-byte ASCII label, `day`: `YYYYMMDD` UTC). It holds no funds. Tests: `test/MihenkRecords.t.sol`.
+
+| Network | MihenkRecords | Writer |
+| --- | --- | --- |
+| 0G mainnet (16661) | [0x4d1f3aB10f21b6995769F4d26195cCB69225eF9C](https://chainscan.0g.ai/address/0x4d1f3aB10f21b6995769F4d26195cCB69225eF9C) | `0xB3298604C606c14FF6B5958AC5CFa64BfcbCa476` |
+
+More on Mihenk and 0G (Compute, Storage, Chain): [`agents/0g`](agents/0g).
 
 ## Bridging USDC to Arc (CCTP)
 

@@ -15,8 +15,9 @@ Live API: `https://app.mihenkai.com/x402/` · OpenAPI: `https://app.mihenkai.com
 | `GET /x402/pay/kol/{handle}` | 0.01 USDC | Same KOL record, paid with standard x402 (`exact`, USDC on Base) |
 | `GET /x402/pay/coin/{symbol}/calls?hours=24` | 0.01 USDC | Same coin calls, paid with standard x402 (`exact`, USDC on Base) |
 | `GET /x402/` and `/x402/openapi.json` | free | Description and spec |
+| `GET /x402/0g` | free | Mihenk on 0G: daily 0G Storage archives of the TEE-verified readings and their on-chain records (see [`../0g`](../0g)) |
 
-- **Networks:** Arc (`eip155:5042`), Base (`eip155:8453`), Polygon (`eip155:137`), through Circle Gateway (batched, gas-free for the buyer).
+- **Networks:** Arc (`eip155:5042`), Base (`eip155:8453`), Polygon (`eip155:137`) and Arbitrum One (`eip155:42161`), through Circle Gateway (batched, gas-free for the buyer).
 - **Standard x402:** the `/x402/pay/...` routes take a plain x402 `exact` payment (EIP-3009 USDC on Base), settled by the
   Coinbase CDP facilitator. Any x402 client works, and the routes are listed in the x402 Bazaar (Agentic.Market).
 - **No charge for nothing:** if a handle or symbol has no measured data, the API answers `404` and the payment is not settled.
